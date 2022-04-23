@@ -100,7 +100,6 @@ class CSPResStage(nn.Module):
 
 class CSPResNet(nn.Module):
     __shared__ = ['width_mult', 'depth_mult', 'trt']
-
     def __init__(self, layers=None, channels=None, act='swish', return_idx=None, depth_wise=False, use_large_stem=False,
                  width_mult=1.0, depth_mult=1.0, trt=False):
         super(CSPResNet, self).__init__()
