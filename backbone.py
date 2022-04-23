@@ -3,9 +3,11 @@ import torch.nn as nn
 
 
 class ConvBNLayer(nn.Module):
-    def __init__(self,in_channels,out_channels,filter_size=3,stride=1,groups=1,padding=0):
+    def __init__(self, in_channels, out_channels, filter_size=3, stride=1, groups=1, padding=0):
         super(ConvBNLayer, self).__init__()
-        self.conv = nn.Conv2d(in_channels=in_channels,out_channels=out_channels,kernel_size=(filter_size,filter_size),stride=(stride,stride),padding=padding,groups=groups,bias=False)
+        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
+                              kernel_size=(filter_size, filter_size), stride=(stride, stride), padding=padding,
+                              groups=groups, bias=False)
         self.bn = nn.BatchNorm2d(out_channels)
         self.act = nn.ReLU(inplace=True)
 
@@ -13,7 +15,6 @@ class ConvBNLayer(nn.Module):
         x = self.conv(x)
         x = self.bn(x)
         x = self.act(x)
-
         return x
 
 
@@ -33,9 +34,6 @@ class RepVggBlock(nn.Module):
             y = self.conv1(x) + self.conv2(x)
         y = self.act(y)
         return y
-
-
-
 
 
 class BasicBlock(nn.Module):
@@ -61,7 +59,7 @@ class EffectiveSELayer(nn.Module):
     """
     def __init__(self, channels, act='hardsigmoid'):
         super(EffectiveSELayer, self).__init__()
-        self.fc = nn.Conv2d(channels, channels, kernel_size=(1,1), padding=0)
+        self.fc = nn.Conv2d(channels, channels, kernel_size=(1, 1), padding=0)
         self.act = nn.Hardsigmoid()
 
     def forward(self, x):
@@ -71,7 +69,7 @@ class EffectiveSELayer(nn.Module):
 
 
 class CSPResStage(nn.Module):
-    def __init__(self,block_fn,ch_in,ch_out,n,stride,act='relu',attn='eca'):
+    def __init__(self, block_fn, ch_in, ch_out, n, stride, act='relu', attn='eca'):
         super(CSPResStage, self).__init__()
         ch_mid = (ch_in + ch_out) // 2
         if stride == 2:
@@ -97,7 +95,6 @@ class CSPResStage(nn.Module):
             y = self.attn(y)
         y = self.conv3(y)
         return y
-
 
 #
 # class CSPResNet(nn.Layer):
