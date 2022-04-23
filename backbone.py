@@ -124,13 +124,12 @@ class CSPResNet(nn.Module):
                                         ConvBNLayer(channels[0] // 2, channels[0], 3, stride=1, padding=1)])
 
         n = len(channels) - 1
-        self.stages = nn.Sequential(*[(str(i), CSPResStage(BasicBlock, channels[i], channels[i + 1], layers[i], 2)) for i in range(n)])
+        self.stages = nn.Sequential(*[CSPResStage(BasicBlock, channels[i], channels[i + 1], layers[i], 2) for i in range(n)])
         self._out_channels = channels[1:]
         self._out_strides = [4, 8, 16, 32]
         self.return_idx = return_idx
 
-    def forward(self, inputs):
-        x = inputs['image']
+    def forward(self, x):
         x = self.stem(x)
         outs = []
         for idx, stage in enumerate(self.stages):
@@ -139,3 +138,21 @@ class CSPResNet(nn.Module):
                 outs.append(x)
 
         return outs
+
+
+
+if __name__ == '__main__':
+    image = torch.randn(1,3,416, 416)
+    model_obj = CSPResNet()
+    image_output = model_obj(image)
+    for x in image_output :
+        print(x.shape)
+    '''
+    
+    torch.Size([1, 128, 104, 104])
+    torch.Size([1, 256, 52, 52])
+    torch.Size([1, 512, 26, 26])
+    torch.Size([1, 1024, 13, 13])
+    
+    '''
+
