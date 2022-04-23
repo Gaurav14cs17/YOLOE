@@ -57,6 +57,7 @@ class EffectiveSELayer(nn.Module):
     """ Effective Squeeze-Excitation
     From `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
     """
+
     def __init__(self, channels, act='hardsigmoid'):
         super(EffectiveSELayer, self).__init__()
         self.fc = nn.Conv2d(channels, channels, kernel_size=(1, 1), padding=0)
@@ -96,80 +97,45 @@ class CSPResStage(nn.Module):
         y = self.conv3(y)
         return y
 
-#
-# class CSPResNet(nn.Layer):
-#     __shared__ = ['width_mult', 'depth_mult', 'trt']
-#
-#     def __init__(self,
-#                  layers=[3, 6, 6, 3],
-#                  channels=[64, 128, 256, 512, 1024],
-#                  act='swish',
-#                  return_idx=[0, 1, 2, 3, 4],
-#                  depth_wise=False,
-#                  use_large_stem=False,
-#                  width_mult=1.0,
-#                  depth_mult=1.0,
-#                  trt=False):
-#         super(CSPResNet, self).__init__()
-#         channels = [max(round(c * width_mult), 1) for c in channels]
-#         layers = [max(round(l * depth_mult), 1) for l in layers]
-#         act = get_act_fn(
-#             act, trt=trt) if act is None or isinstance(act,
-#                                                        (str, dict)) else act
-#
-#         if use_large_stem:
-#             self.stem = nn.Sequential(
-#                 ('conv1', ConvBNLayer(
-#                     3, channels[0] // 2, 3, stride=2, padding=1, act=act)),
-#                 ('conv2', ConvBNLayer(
-#                     channels[0] // 2,
-#                     channels[0] // 2,
-#                     3,
-#                     stride=1,
-#                     padding=1,
-#                     act=act)), ('conv3', ConvBNLayer(
-#                         channels[0] // 2,
-#                         channels[0],
-#                         3,
-#                         stride=1,
-#                         padding=1,
-#                         act=act)))
-#         else:
-#             self.stem = nn.Sequential(
-#                 ('conv1', ConvBNLayer(
-#                     3, channels[0] // 2, 3, stride=2, padding=1, act=act)),
-#                 ('conv2', ConvBNLayer(
-#                     channels[0] // 2,
-#                     channels[0],
-#                     3,
-#                     stride=1,
-#                     padding=1,
-#                     act=act)))
-#
-#         n = len(channels) - 1
-#         self.stages = nn.Sequential(*[(str(i), CSPResStage(
-#             BasicBlock, channels[i], channels[i + 1], layers[i], 2, act=act))
-#                                       for i in range(n)])
-#
-#         self._out_channels = channels[1:]
-#         self._out_strides = [4, 8, 16, 32]
-#         self.return_idx = return_idx
-#
-#     def forward(self, inputs):
-#         x = inputs['image']
-#         x = self.stem(x)
-#         outs = []
-#         for idx, stage in enumerate(self.stages):
-#             x = stage(x)
-#             if idx in self.return_idx:
-#                 outs.append(x)
-#
-#         return outs
-#
-#     @property
-#     def out_shape(self):
-#         return [
-#             ShapeSpec(
-#                 channels=self._out_channels[i], stride=self._out_strides[i])
-#             for i in self.return_idx
-#         ]
+
+class CSPResNet(nn.Module):
+    __shared__ = ['width_mult', 'depth_mult', 'trt']
+
+    def __init__(self, layers=None, channels=None, act='swish', return_idx=None, depth_wise=False, use_large_stem=False,
+                 width_mult=1.0, depth_mult=1.0, trt=False):
+        super(CSPResNet, self).__init__()
+        if return_idx is None:
+            return_idx = [0, 1, 2, 3, 4]
+        if channels is None:
+            channels = [64, 128, 256, 512, 1024]
+        if layers is None:
+            layers = [3, 6, 6, 3]
+        channels = [max(round(c * width_mult), 1) for c in channels]
+        layers = [max(round(l * depth_mult), 1) for l in layers]
+        act = nn.ReLU(inplace=True)
+
+        if use_large_stem:
+            self.stem = nn.Sequential(
+                *[ConvBNLayer(3, channels[0] // 2, 3, stride=2, padding=1),
+                  ConvBNLayer(channels[0] // 2, channels[0] // 2, 3, stride=1, padding=1),
+                  ConvBNLayer(channels[0] // 2, channels[0], 3, stride=1, padding=1)])
+        else:
+            self.stem = nn.Sequential(*[ConvBNLayer(3, channels[0] // 2, 3, stride=2, padding=1),
+                                        ConvBNLayer(channels[0] // 2, channels[0], 3, stride=1, padding=1)])
+
+        n = len(channels) - 1
+        self.stages = nn.Sequential(*[(str(i), CSPResStage(BasicBlock, channels[i], channels[i + 1], layers[i], 2)) for i in range(n)])
+        self._out_channels = channels[1:]
+        self._out_strides = [4, 8, 16, 32]
+        self.return_idx = return_idx
+
+    def forward(self, inputs):
+        x = inputs['image']
+        x = self.stem(x)
+        outs = []
+        for idx, stage in enumerate(self.stages):
+            x = stage(x)
+            if idx in self.return_idx:
+                outs.append(x)
+
+        return outs
