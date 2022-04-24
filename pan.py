@@ -55,54 +55,52 @@ class CSPStage(nn.Module):
 class CustomCSPPAN(nn.Module):
     __shared__ = ['norm_type', 'data_format', 'width_mult', 'depth_mult', 'trt']
 
-    def __init__(self, in_channels=[256, 512, 1024], out_channels=[1024, 512, 256], norm_type='bn', act='leaky',
+    def __init__(self, in_channels=None, out_channels=None, norm_type='bn', act='leaky',
                  stage_fn='CSPStage', block_fn='BasicBlock', stage_num=1, block_num=3, drop_block=False, block_size=3,
                  keep_prob=0.9, spp=False, data_format='NCHW', width_mult=1.0, depth_mult=1.0, trt=False):
 
         super(CustomCSPPAN, self).__init__()
+        if out_channels is None:
+            out_channels = [1024, 512, 256]
+        if in_channels is None:
+            in_channels = [256, 512, 1024]
+
         out_channels = [max(round(c * width_mult), 1) for c in out_channels]
         block_num = max(round(block_num * depth_mult), 1)
-        # act = get_act_fn(
-        #     act, trt=trt) if act is None or isinstance(act,
-        #                                                (str, dict)) else act
+
         self.num_blocks = len(in_channels)
         self.data_format = data_format
         self._out_channels = out_channels
         in_channels = in_channels[::-1]
         fpn_stages = []
         fpn_routes = []
+        ch_pre = 0
         for i, (ch_in, ch_out) in enumerate(zip(in_channels, out_channels)):
             if i > 0:
                 ch_in += ch_pre // 2
             stage = nn.Sequential()
             for j in range(stage_num):
-                stage.add_sublayer(eval(stage_fn)(block_fn,ch_in if j == 0 else ch_out,ch_out,block_num,act=act,spp=(spp and i == 0)))
-
+                stage.add_sublayer(eval(stage_fn)(block_fn, ch_in if j == 0 else ch_out, ch_out, block_num, act=act,spp=(spp and i == 0)))
             fpn_stages.append(stage)
             if i < self.num_blocks - 1:
-                fpn_routes.append(ConvBNLayer(in_channels=ch_out,out_channels=ch_out // 2,filter_size=1,stride=1,padding=0,))
+                fpn_routes.append(ConvBNLayer(in_channels=ch_out, out_channels=ch_out // 2, filter_size=1, stride=1, padding=0, ))
             ch_pre = ch_out
 
-        self.fpn_stages = nn.LayerList(fpn_stages)
-        self.fpn_routes = nn.LayerList(fpn_routes)
-
+        self.fpn_stages = nn.ModuleList(fpn_stages)
+        self.fpn_routes = nn.ModuleList(fpn_routes)
         pan_stages = []
         pan_routes = []
         for i in reversed(range(self.num_blocks - 1)):
-            pan_routes.append(
-                ConvBNLayer(in_channels=out_channels[i + 1],out_channels=out_channels[i + 1],filter_size=3,stride=2,padding=1,))
+            pan_routes.append(ConvBNLayer(in_channels=out_channels[i + 1], out_channels=out_channels[i + 1], filter_size=3, stride=2,padding=1, ))
             ch_in = out_channels[i] + out_channels[i + 1]
             ch_out = out_channels[i]
             stage = nn.Sequential()
             for j in range(stage_num):
-                stage.add_sublayer(eval(stage_fn)(block_fn,ch_in if j == 0 else ch_out,ch_out,block_num,act=act,spp=False))
-            if drop_block:
-                stage.add_sublayer('drop', DropBlock(block_size, keep_prob))
-
+                stage.add_sublayer(eval(stage_fn)(block_fn, ch_in if j == 0 else ch_out, ch_out, block_num, act=act, spp=False))
             pan_stages.append(stage)
 
-        self.pan_stages = nn.LayerList(pan_stages[::-1])
-        self.pan_routes = nn.LayerList(pan_routes[::-1])
+        self.pan_stages = nn.ModuleList(pan_stages[::-1])
+        self.pan_routes = nn.ModuleList(pan_routes[::-1])
 
     def forward(self, blocks, for_mot=False):
         blocks = blocks[::-1]
@@ -113,11 +111,9 @@ class CustomCSPPAN(nn.Module):
                 block = torch.concat([route, block], dim=1)
             route = self.fpn_stages[i](block)
             fpn_feats.append(route)
-
             if i < self.num_blocks - 1:
                 route = self.fpn_routes[i](route)
-                route = F.interpolate(
-                    route, scale_factor=2., data_format=self.data_format)
+                route = F.interpolate(route, scale_factor=2)
 
         pan_feats = [fpn_feats[-1], ]
         route = fpn_feats[-1]
@@ -129,4 +125,3 @@ class CustomCSPPAN(nn.Module):
             pan_feats.append(route)
 
         return pan_feats[::-1]
-
