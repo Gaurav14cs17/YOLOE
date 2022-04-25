@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from .backbone import ConvBNLayer, BasicBlock
+from  backbone import ConvBNLayer, BasicBlock
 import torch.nn.functional as F
 
 __all__ = ['CustomCSPPAN']
@@ -29,7 +29,7 @@ class SPP(nn.Module):
 
 
 class CSPStage(nn.Module):
-    def __init__(self, block_fn, ch_in, ch_out, n, act='swish', spp=False):
+    def __init__(self, ch_in, ch_out, n, act='swish', spp=False):
         super(CSPStage, self).__init__()
         ch_mid = int(ch_out // 2)
         self.conv1 = ConvBNLayer(ch_in, ch_mid, 1)
@@ -37,9 +37,9 @@ class CSPStage(nn.Module):
         self.convs = nn.Sequential()
         next_ch_in = ch_mid
         for i in range(n):
-            self.convs.add_sublayer(eval(block_fn)(next_ch_in, ch_mid, act=act, shortcut=False))
+            self.convs.add_module('Conv_'+ str(i) ,BasicBlock(next_ch_in, ch_mid, act=act, shortcut=False))
             if i == (n - 1) // 2 and spp:
-                self.convs.add_sublayer(SPP(ch_mid * 4, ch_mid, 1, [5, 9, 13], act=act))
+                self.convs.add_module('SPP_'+ str(i) ,SPP(ch_mid * 4, ch_mid, 1, [5, 9, 13], act=act))
             next_ch_in = ch_mid
         self.conv3 = ConvBNLayer(ch_mid * 2, ch_out, 1)
 
@@ -55,8 +55,7 @@ class CSPStage(nn.Module):
 class CustomCSPPAN(nn.Module):
     __shared__ = ['norm_type', 'data_format', 'width_mult', 'depth_mult', 'trt']
 
-    def __init__(self, in_channels=None, out_channels=None, norm_type='bn', act='leaky',
-                 stage_fn='CSPStage', block_fn='BasicBlock', stage_num=1, block_num=3, drop_block=False, block_size=3,
+    def __init__(self, in_channels=None, out_channels=None, norm_type='bn', act='leaky', stage_num=1, block_num=3, drop_block=False, block_size=3,
                  keep_prob=0.9, spp=False, data_format='NCHW', width_mult=1.0, depth_mult=1.0, trt=False):
 
         super(CustomCSPPAN, self).__init__()
@@ -80,7 +79,10 @@ class CustomCSPPAN(nn.Module):
                 ch_in += ch_pre // 2
             stage = nn.Sequential()
             for j in range(stage_num):
-                stage.add_sublayer(eval(stage_fn)(block_fn, ch_in if j == 0 else ch_out, ch_out, block_num, act=act,spp=(spp and i == 0)))
+                if j==0:
+                    stage.add_module("CSPStage_"+str(j), CSPStage(ch_in , ch_out, block_num, act=act,spp=(spp and i == 0)))
+                else:
+                    stage.add_module("CSPStage_"+str(j) ,CSPStage(ch_out, ch_out, block_num, act=act, spp=(spp and i == 0)))
             fpn_stages.append(stage)
             if i < self.num_blocks - 1:
                 fpn_routes.append(ConvBNLayer(in_channels=ch_out, out_channels=ch_out // 2, filter_size=1, stride=1, padding=0, ))
@@ -96,7 +98,7 @@ class CustomCSPPAN(nn.Module):
             ch_out = out_channels[i]
             stage = nn.Sequential()
             for j in range(stage_num):
-                stage.add_sublayer(eval(stage_fn)(block_fn, ch_in if j == 0 else ch_out, ch_out, block_num, act=act, spp=False))
+                stage.add_module( "CSPStage__" + str(j),CSPStage(ch_in if j == 0 else ch_out, ch_out, block_num, act=act, spp=False))
             pan_stages.append(stage)
 
         self.pan_stages = nn.ModuleList(pan_stages[::-1])
@@ -108,6 +110,7 @@ class CustomCSPPAN(nn.Module):
 
         for i, block in enumerate(blocks):
             if i > 0:
+                print(route.shape, block.shape)
                 block = torch.concat([route, block], dim=1)
             route = self.fpn_stages[i](block)
             fpn_feats.append(route)
@@ -125,3 +128,35 @@ class CustomCSPPAN(nn.Module):
             pan_feats.append(route)
 
         return pan_feats[::-1]
+
+
+
+if __name__ == '__main__':
+
+    '''
+    Input : 
+    torch.Size([1, 128, 104, 104])
+    torch.Size([1, 256, 52, 52])
+    torch.Size([1, 512, 26, 26])
+    torch.Size([1, 1024, 13, 13])
+    
+    '''
+    model_obj = CustomCSPPAN()
+
+    image_2 = torch.randn((1, 256, 52, 52))
+    image_3 = torch.randn((1, 512, 26, 26))
+    image_4 = torch.randn((1, 1024, 13, 13))
+
+    images_list = []
+    images_list.append(image_2)
+    images_list.append(image_3)
+    images_list.append(image_4)
+
+    for x in model_obj(images_list):
+        print(x.shape)
+
+    '''
+    torch.Size([1, 1024, 13, 13])
+    torch.Size([1, 512, 26, 26])
+    torch.Size([1, 256, 52, 52])
+    '''
