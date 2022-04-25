@@ -156,6 +156,7 @@ if __name__ == '__main__':
         print(x.shape)
 
     '''
+    Output : 
     torch.Size([1, 1024, 13, 13])
     torch.Size([1, 512, 26, 26])
     torch.Size([1, 256, 52, 52])
