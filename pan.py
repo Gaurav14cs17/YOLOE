@@ -110,7 +110,6 @@ class CustomCSPPAN(nn.Module):
 
         for i, block in enumerate(blocks):
             if i > 0:
-                print(route.shape, block.shape)
                 block = torch.concat([route, block], dim=1)
             route = self.fpn_stages[i](block)
             fpn_feats.append(route)
