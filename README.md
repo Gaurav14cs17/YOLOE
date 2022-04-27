@@ -8,3 +8,7 @@ ET-head and dynamic label assignment algorithm TAL.
 
 ![YOLOE](https://github.com/Gaurav14cs17/YOLOE/blob/main/images/yoloe.png)
 
+
+
+Paper : https://arxiv.org/abs/2203.16250
+
