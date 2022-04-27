@@ -9,8 +9,8 @@ ET-head and dynamic label assignment algorithm TAL.
 ![YOLOE](https://github.com/Gaurav14cs17/YOLOE/blob/main/images/yoloe.png)
 
 
-'''
-References:  https://arxiv.org/abs/2203.16250
-           https://github.com/PaddlePaddle/PaddleDetection
-'''
+
+References:   https://github.com/PaddlePaddle/PaddleDetection
+         
+
 
