@@ -10,7 +10,7 @@ ET-head and dynamic label assignment algorithm TAL.
 
 
 
-References : 1) https://arxiv.org/abs/2203.16250
-           : 2) https://github.com/PaddlePaddle/PaddleDetection
+References :  # https://arxiv.org/abs/2203.16250
+           :  # https://github.com/PaddlePaddle/PaddleDetection
 
 
