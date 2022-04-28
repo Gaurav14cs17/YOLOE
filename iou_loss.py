@@ -250,7 +250,6 @@ if __name__ == '__main__':
     obj_GIoULoss = GIoULoss()
     obj_IouLoss = IouLoss()
     pbox = torch.randn(16)
-
     gbox = torch.randn(16)
 
     print("Pbox : ", torch.split(pbox, split_size_or_sections=4, dim=-1))
@@ -261,5 +260,5 @@ if __name__ == '__main__':
     giou_value =  obj_GIoULoss(pbox,gbox)
     print("GIOU", giou_value)
 
-    
+
 
