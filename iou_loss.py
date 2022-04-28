@@ -91,6 +91,7 @@ class IouLoss(object):
         ciou_term (bool): whether to add ciou_term
         loss_square (bool): whether to square the iou term
     """
+
     def __init__(self, loss_weight=2.5, giou=False, diou=False, ciou=False, loss_square=True):
         self.loss_weight = loss_weight
         self.giou = giou
@@ -150,8 +151,8 @@ class GIoULoss(object):
         return iou, overlap, union
 
     def __call__(self, pbox, gbox, iou_weight=1., loc_reweight=None):
-        x1, y1, x2, y2 = torch.split(pbox, split_size_or_sections = 4, dim=-1)
-        x1g, y1g, x2g, y2g = torch.split(gbox, split_size_or_sections =4, dim=-1)
+        x1, y1, x2, y2 = torch.split(pbox, split_size_or_sections=4, dim=-1)
+        x1g, y1g, x2g, y2g = torch.split(gbox, split_size_or_sections=4, dim=-1)
         box1 = [x1, y1, x2, y2]
         box2 = [x1g, y1g, x2g, y2g]
         iou, overlap, union = self.bbox_overlap(box1, box2, self.eps)
@@ -190,9 +191,10 @@ class DIouLoss(GIoULoss):
         super(DIouLoss, self).__init__(loss_weight=loss_weight, eps=eps)
         self.use_complete_iou_loss = use_complete_iou_loss
 
-    def __call__(self, pbox, gbox, iou_weight=1. , loc_reweight = None ):
-        x1, y1, x2, y2 = torch.split(pbox, split_size_or_sections =4, dim=-1)
-        x1g, y1g, x2g, y2g = torch.split(gbox, split_size_or_sections =4, dim=-1)
+    def __call__(self, pbox, gbox, iou_weight=1., loc_reweight=None):
+
+        x1, y1, x2, y2 = torch.split(pbox, split_size_or_sections=4, dim=-1)
+        x1g, y1g, x2g, y2g = torch.split(gbox, split_size_or_sections=4, dim=-1)
         cx = (x1 + x2) / 2
         cy = (y1 + y2) / 2
         w = x2 - x1
@@ -241,3 +243,23 @@ class DIouLoss(GIoULoss):
 
         diou = torch.mean((1 - iouk + ciou_term + diou_term) * iou_weight)
         return diou * self.loss_weight
+
+
+if __name__ == '__main__':
+    obj_DIouLoss = DIouLoss()
+    obj_GIoULoss = GIoULoss()
+    obj_IouLoss = IouLoss()
+    pbox = torch.randn(16)
+
+    gbox = torch.randn(16)
+
+    print("Pbox : ", torch.split(pbox, split_size_or_sections=4, dim=-1))
+    print("Gbox : ", torch.split(gbox, split_size_or_sections=4, dim=-1))
+    print("\n\n")
+    diou_value = obj_DIouLoss(pbox, gbox)
+    print("DIOU", diou_value)
+    giou_value =  obj_GIoULoss(pbox,gbox)
+    print("GIOU", giou_value)
+
+    
+
