@@ -1,6 +1,6 @@
 import math
-import paddle
 import numpy as np
+import torch
 
 
 def bbox2delta(src_boxes, tgt_boxes, weights):
@@ -17,10 +17,10 @@ def bbox2delta(src_boxes, tgt_boxes, weights):
     wx, wy, ww, wh = weights
     dx = wx * (tgt_ctr_x - src_ctr_x) / src_w
     dy = wy * (tgt_ctr_y - src_ctr_y) / src_h
-    dw = ww * paddle.log(tgt_w / src_w)
-    dh = wh * paddle.log(tgt_h / src_h)
+    dw = ww * torch.log(tgt_w / src_w)
+    dh = wh * torch.log(tgt_h / src_h)
 
-    deltas = paddle.stack((dx, dy, dw, dh), axis=1)
+    deltas = torch.stack((dx, dy, dw, dh), dim=1)
     return deltas
 
 
@@ -169,7 +169,7 @@ def batch_bbox_overlaps(bboxes1,
 
     if rows * cols == 0:
         if is_aligned:
-            return paddle.full(batch_shape + (rows, ), 1)
+            return paddle.full(batch_shape + (rows,), 1)
         else:
             return paddle.full(batch_shape + (rows, cols), 1)
 
@@ -200,25 +200,25 @@ def batch_bbox_overlaps(bboxes1,
         overlap = wh[:, :, 0] * wh[:, :, 1]
 
         if mode in ['iou', 'giou']:
-            union = area1.reshape([rows,1]) \
-                    + area2.reshape([1,cols]) - overlap
+            union = area1.reshape([rows, 1]) \
+                    + area2.reshape([1, cols]) - overlap
         else:
             union = area1[:, None]
         if mode == 'giou':
-            enclosed_lt = paddle.minimum(bboxes1[:, :2].reshape([rows, 1, 2]),
+            enclosed_lt = torch.minimum(bboxes1[:, :2].reshape([rows, 1, 2]),
                                          bboxes2[:, :2])
-            enclosed_rb = paddle.maximum(bboxes1[:, 2:].reshape([rows, 1, 2]),
+            enclosed_rb = torch.maximum(bboxes1[:, 2:].reshape([rows, 1, 2]),
                                          bboxes2[:, 2:])
 
-    eps = paddle.to_tensor([eps])
-    union = paddle.maximum(union, eps)
+    eps = torch.to_tensor([eps])
+    union = torch.maximum(union, eps)
     ious = overlap / union
     if mode in ['iou', 'iof']:
         return ious
     # calculate gious
     enclose_wh = (enclosed_rb - enclosed_lt).clip(min=0)
     enclose_area = enclose_wh[:, :, 0] * enclose_wh[:, :, 1]
-    enclose_area = paddle.maximum(enclose_area, eps)
+    enclose_area = torch.maximum(enclose_area, eps)
     gious = ious - (enclose_area - union) / enclose_area
     return 1 - gious
 
@@ -233,8 +233,8 @@ def xywh2xyxy(box):
 
 
 def make_grid(h, w, dtype):
-    yv, xv = paddle.meshgrid([paddle.arange(h), paddle.arange(w)])
-    return paddle.stack((xv, yv), 2).cast(dtype=dtype)
+    yv, xv = torch.meshgrid([torch.arange(h), torch.arange(w)])
+    return torch.stack((xv, yv), 2).cast(dtype=dtype)
 
 
 def decode_yolo(box, anchor, downsample_ratio):
@@ -255,11 +255,11 @@ def decode_yolo(box, anchor, downsample_ratio):
     x1 = (x + grid[:, :, :, :, 0:1]) / grid_w
     y1 = (y + grid[:, :, :, :, 1:2]) / grid_h
 
-    anchor = paddle.to_tensor(anchor)
-    anchor = paddle.cast(anchor, x.dtype)
+    anchor = torch.to_tensor(anchor)
+    anchor = torch.cast(anchor, x.dtype)
     anchor = anchor.reshape((1, na, 1, 1, 2))
-    w1 = paddle.exp(w) * anchor[:, :, :, :, 0:1] / (downsample_ratio * grid_w)
-    h1 = paddle.exp(h) * anchor[:, :, :, :, 1:2] / (downsample_ratio * grid_h)
+    w1 = torch.exp(w) * anchor[:, :, :, :, 0:1] / (downsample_ratio * grid_w)
+    h1 = torch.exp(h) * anchor[:, :, :, :, 1:2] / (downsample_ratio * grid_h)
 
     return [x1, y1, w1, h1]
 
@@ -278,8 +278,8 @@ def iou_similarity(box1, box2, eps=1e-9):
     box2 = box2.unsqueeze(1)  # [N, M2, 4] -> [N, 1, M2, 4]
     px1y1, px2y2 = box1[:, :, :, 0:2], box1[:, :, :, 2:4]
     gx1y1, gx2y2 = box2[:, :, :, 0:2], box2[:, :, :, 2:4]
-    x1y1 = paddle.maximum(px1y1, gx1y1)
-    x2y2 = paddle.minimum(px2y2, gx2y2)
+    x1y1 = torch.maximum(px1y1, gx1y1)
+    x2y2 = torch.minimum(px2y2, gx2y2)
     overlap = (x2y2 - x1y1).clip(0).prod(-1)
     area1 = (px2y2 - px1y1).clip(0).prod(-1)
     area2 = (gx2y2 - gx1y1).clip(0).prod(-1)
@@ -303,10 +303,10 @@ def bbox_iou(box1, box2, giou=False, diou=False, ciou=False, eps=1e-9):
     """
     px1, py1, px2, py2 = box1
     gx1, gy1, gx2, gy2 = box2
-    x1 = paddle.maximum(px1, gx1)
-    y1 = paddle.maximum(py1, gy1)
-    x2 = paddle.minimum(px2, gx2)
-    y2 = paddle.minimum(py2, gy2)
+    x1 = torch.maximum(px1, gx1)
+    y1 = torch.maximum(py1, gy1)
+    x2 = torch.minimum(px2, gx2)
+    y2 = torch.minimum(py2, gy2)
 
     overlap = ((x2 - x1).clip(0)) * ((y2 - y1).clip(0))
 
@@ -321,23 +321,23 @@ def bbox_iou(box1, box2, giou=False, diou=False, ciou=False, eps=1e-9):
 
     if giou or ciou or diou:
         # convex w, h
-        cw = paddle.maximum(px2, gx2) - paddle.minimum(px1, gx1)
-        ch = paddle.maximum(py2, gy2) - paddle.minimum(py1, gy1)
+        cw = torch.maximum(px2, gx2) - torch.minimum(px1, gx1)
+        ch = torch.maximum(py2, gy2) - torch.minimum(py1, gy1)
         if giou:
             c_area = cw * ch + eps
             return iou - (c_area - union) / c_area
         else:
             # convex diagonal squared
-            c2 = cw**2 + ch**2 + eps
+            c2 = cw ** 2 + ch ** 2 + eps
             # center distance
-            rho2 = ((px1 + px2 - gx1 - gx2)**2 + (py1 + py2 - gy1 - gy2)**2) / 4
+            rho2 = ((px1 + px2 - gx1 - gx2) ** 2 + (py1 + py2 - gy1 - gy2) ** 2) / 4
             if diou:
                 return iou - rho2 / c2
             else:
                 w1, h1 = px2 - px1, py2 - py1 + eps
                 w2, h2 = gx2 - gx1, gy2 - gy1 + eps
-                delta = paddle.atan(w1 / h1) - paddle.atan(w2 / h2)
-                v = (4 / math.pi**2) * paddle.pow(delta, 2)
+                delta = torch.atan(w1 / h1) - torch.atan(w2 / h2)
+                v = (4 / math.pi ** 2) * torch.pow(delta, 2)
                 alpha = v / (1 + eps - iou + v)
                 alpha.stop_gradient = True
                 return iou - (rho2 / c2 + v * alpha)
@@ -381,9 +381,9 @@ def delta2rbox(rrois,
     :param wh_ratio_clip:
     :return:
     """
-    means = paddle.to_tensor(means)
-    stds = paddle.to_tensor(stds)
-    deltas = paddle.reshape(deltas, [-1, deltas.shape[-1]])
+    means = torch.to_tensor(means)
+    stds = torch.to_tensor(stds)
+    deltas = torch.reshape(deltas, [-1, deltas.shape[-1]])
     denorm_deltas = deltas * stds + means
 
     dx = denorm_deltas[:, 0]
@@ -393,8 +393,8 @@ def delta2rbox(rrois,
     dangle = denorm_deltas[:, 4]
 
     max_ratio = np.abs(np.log(wh_ratio_clip))
-    dw = paddle.clip(dw, min=-max_ratio, max=max_ratio)
-    dh = paddle.clip(dh, min=-max_ratio, max=max_ratio)
+    dw = torch.clip(dw, min=-max_ratio, max=max_ratio)
+    dh = torch.clip(dh, min=-max_ratio, max=max_ratio)
 
     rroi_x = rrois[:, 0]
     rroi_y = rrois[:, 1]
@@ -402,19 +402,19 @@ def delta2rbox(rrois,
     rroi_h = rrois[:, 3]
     rroi_angle = rrois[:, 4]
 
-    gx = dx * rroi_w * paddle.cos(rroi_angle) - dy * rroi_h * paddle.sin(
+    gx = dx * rroi_w * torch.cos(rroi_angle) - dy * rroi_h * torch.sin(
         rroi_angle) + rroi_x
-    gy = dx * rroi_w * paddle.sin(rroi_angle) + dy * rroi_h * paddle.cos(
+    gy = dx * rroi_w * torch.sin(rroi_angle) + dy * rroi_h * torch.cos(
         rroi_angle) + rroi_y
     gw = rroi_w * dw.exp()
     gh = rroi_h * dh.exp()
     ga = np.pi * dangle + rroi_angle
     ga = (ga + np.pi / 4) % np.pi - np.pi / 4
-    ga = paddle.to_tensor(ga)
+    ga = torch.to_tensor(ga)
 
-    gw = paddle.to_tensor(gw, dtype='float32')
-    gh = paddle.to_tensor(gh, dtype='float32')
-    bboxes = paddle.stack([gx, gy, gw, gh, ga], axis=-1)
+    gw = torch.to_tensor(gw, dtype='float32')
+    gh = torch.to_tensor(gh, dtype='float32')
+    bboxes = torch.stack([gx, gy, gw, gh, ga], dim=-1)
     return bboxes
 
 
@@ -473,20 +473,20 @@ def bbox_decode(bbox_preds,
     return:
         bboxes: [N,H,W,5]
     """
-    means = paddle.to_tensor(means)
-    stds = paddle.to_tensor(stds)
+    means = torch.to_tensor(means)
+    stds = torch.to_tensor(stds)
     num_imgs, H, W, _ = bbox_preds.shape
     bboxes_list = []
     for img_id in range(num_imgs):
         bbox_pred = bbox_preds[img_id]
         # bbox_pred.shape=[5,H,W]
         bbox_delta = bbox_pred
-        anchors = paddle.to_tensor(anchors)
+        anchors = torch.to_tensor(anchors)
         bboxes = delta2rbox(
             anchors, bbox_delta, means, stds, wh_ratio_clip=1e-6)
-        bboxes = paddle.reshape(bboxes, [H, W, 5])
+        bboxes = torch.reshape(bboxes, [H, W, 5])
         bboxes_list.append(bboxes)
-    return paddle.stack(bboxes_list, axis=0)
+    return torch.stack(bboxes_list, axis=0)
 
 
 def poly2rbox(polys):
@@ -601,7 +601,7 @@ def rbox2poly(rrects):
     to
     poly:[x0,y0,x1,y1,x2,y2,x3,y3]
     """
-    N = paddle.shape(rrects)[0]
+    N = torch.shape(rrects)[0]
 
     x_ctr = rrects[:, 0]
     y_ctr = rrects[:, 1]
@@ -611,25 +611,25 @@ def rbox2poly(rrects):
 
     tl_x, tl_y, br_x, br_y = -width * 0.5, -height * 0.5, width * 0.5, height * 0.5
 
-    normal_rects = paddle.stack(
-        [tl_x, br_x, br_x, tl_x, tl_y, tl_y, br_y, br_y], axis=0)
-    normal_rects = paddle.reshape(normal_rects, [2, 4, N])
-    normal_rects = paddle.transpose(normal_rects, [2, 0, 1])
+    normal_rects = torch.stack(
+        [tl_x, br_x, br_x, tl_x, tl_y, tl_y, br_y, br_y], dim=0)
+    normal_rects = torch.reshape(normal_rects, [2, 4, N])
+    normal_rects = torch.transpose(normal_rects, [2, 0, 1])
 
-    sin, cos = paddle.sin(angle), paddle.cos(angle)
+    sin, cos = torch.sin(angle), torch.cos(angle)
     # M.shape=[N,2,2]
-    M = paddle.stack([cos, -sin, sin, cos], axis=0)
-    M = paddle.reshape(M, [2, 2, N])
-    M = paddle.transpose(M, [2, 0, 1])
+    M = torch.stack([cos, -sin, sin, cos], dim=0)
+    M = torch.reshape(M, [2, 2, N])
+    M = torch.transpose(M, [2, 0, 1])
 
     # polys:[N,8]
-    polys = paddle.matmul(M, normal_rects)
-    polys = paddle.transpose(polys, [2, 1, 0])
-    polys = paddle.reshape(polys, [-1, N])
-    polys = paddle.transpose(polys, [1, 0])
+    polys = torch.matmul(M, normal_rects)
+    polys = torch.transpose(polys, [2, 1, 0])
+    polys = torch.reshape(polys, [-1, N])
+    polys = torch.transpose(polys, [1, 0])
 
-    tmp = paddle.stack(
-        [x_ctr, y_ctr, x_ctr, y_ctr, x_ctr, y_ctr, x_ctr, y_ctr], axis=1)
+    tmp = torch.stack(
+        [x_ctr, y_ctr, x_ctr, y_ctr, x_ctr, y_ctr, x_ctr, y_ctr], dim=1)
     polys = polys + tmp
     return polys
 
@@ -702,7 +702,7 @@ def bbox2distance(points, bbox, max_dis=None, eps=0.1):
         top = top.clip(min=0, max=max_dis - eps)
         right = right.clip(min=0, max=max_dis - eps)
         bottom = bottom.clip(min=0, max=max_dis - eps)
-    return paddle.stack([left, top, right, bottom], -1)
+    return torch.stack([left, top, right, bottom], -1)
 
 
 def distance2bbox(points, distance, max_shape=None):
@@ -724,7 +724,7 @@ def distance2bbox(points, distance, max_shape=None):
         y1 = y1.clip(min=0, max=max_shape[0])
         x2 = x2.clip(min=0, max=max_shape[1])
         y2 = y2.clip(min=0, max=max_shape[0])
-    return paddle.stack([x1, y1, x2, y2], -1)
+    return torch.stack([x1, y1, x2, y2], -1)
 
 
 def bbox_center(boxes):
@@ -736,7 +736,7 @@ def bbox_center(boxes):
     """
     boxes_cx = (boxes[..., 0] + boxes[..., 2]) / 2
     boxes_cy = (boxes[..., 1] + boxes[..., 3]) / 2
-    return paddle.stack([boxes_cx, boxes_cy], axis=-1)
+    return torch.stack([boxes_cx, boxes_cy], dim=-1)
 
 
 def batch_distance2bbox(points, distance, max_shapes=None):
@@ -748,19 +748,19 @@ def batch_distance2bbox(points, distance, max_shapes=None):
     Returns:
         Tensor: Decoded bboxes, "x1y1x2y2" format.
     """
-    lt, rb = paddle.split(distance, 2, -1)
+    lt, rb = torch.split(distance, 2, -1)
     # while tensor add parameters, parameters should be better placed on the second place
     x1y1 = -lt + points
     x2y2 = rb + points
-    out_bbox = paddle.concat([x1y1, x2y2], -1)
+    out_bbox = torch.concat([x1y1, x2y2], -1)
     if max_shapes is not None:
         max_shapes = max_shapes.flip(-1).tile([1, 2])
         delta_dim = out_bbox.ndim - max_shapes.ndim
         for _ in range(delta_dim):
             max_shapes.unsqueeze_(1)
-        out_bbox = paddle.where(out_bbox < max_shapes, out_bbox, max_shapes)
-        out_bbox = paddle.where(out_bbox > 0, out_bbox,
-                                paddle.zeros_like(out_bbox))
+        out_bbox = torch.where(out_bbox < max_shapes, out_bbox, max_shapes)
+        out_bbox = torch.where(out_bbox > 0, out_bbox,
+                                torch.zeros_like(out_bbox))
     return out_bbox
 
 
@@ -788,9 +788,9 @@ def delta2bbox_v2(rois,
         ctr_clip (float or None): whether to clip delta xy of decoded bboxes
     """
     if rois.size == 0:
-        return paddle.empty_like(rois)
-    means = paddle.to_tensor(means)
-    stds = paddle.to_tensor(stds)
+        return torch.empty_like(rois)
+    means = torch.to_tensor(means)
+    stds = torch.to_tensor(stds)
     deltas = deltas * stds + means
 
     dxy = deltas[..., :2]
@@ -802,8 +802,8 @@ def delta2bbox_v2(rois,
 
     max_ratio = np.abs(np.log(wh_ratio_clip))
     if ctr_clip is not None:
-        dxy_wh = paddle.clip(dxy_wh, max=ctr_clip, min=-ctr_clip)
-        dwh = paddle.clip(dwh, max=max_ratio)
+        dxy_wh = torch.clip(dxy_wh, max=ctr_clip, min=-ctr_clip)
+        dwh = torch.clip(dwh, max=max_ratio)
     else:
         dwh = dwh.clip(min=-max_ratio, max=max_ratio)
 
@@ -811,7 +811,7 @@ def delta2bbox_v2(rois,
     gwh = pwh * dwh.exp()
     x1y1 = gxy - (gwh * 0.5)
     x2y2 = gxy + (gwh * 0.5)
-    bboxes = paddle.concat([x1y1, x2y2], axis=-1)
+    bboxes = torch.concat([x1y1, x2y2], dim=-1)
     if max_shape is not None:
         bboxes[..., 0::2] = bboxes[..., 0::2].clip(min=0, max=max_shape[1])
         bboxes[..., 1::2] = bboxes[..., 1::2].clip(min=0, max=max_shape[0])
@@ -831,7 +831,7 @@ def bbox2delta_v2(src_boxes,
         stds (list[float]): the std that will be used to normalize delta
     """
     if src_boxes.size == 0:
-        return paddle.empty_like(src_boxes)
+        return torch.empty_like(src_boxes)
     src_w = src_boxes[..., 2] - src_boxes[..., 0]
     src_h = src_boxes[..., 3] - src_boxes[..., 1]
     src_ctr_x = src_boxes[..., 0] + 0.5 * src_w
@@ -844,11 +844,11 @@ def bbox2delta_v2(src_boxes,
 
     dx = (tgt_ctr_x - src_ctr_x) / src_w
     dy = (tgt_ctr_y - src_ctr_y) / src_h
-    dw = paddle.log(tgt_w / src_w)
-    dh = paddle.log(tgt_h / src_h)
+    dw = torch.log(tgt_w / src_w)
+    dh = torch.log(tgt_h / src_h)
 
-    deltas = paddle.stack((dx, dy, dw, dh), axis=1)  # [n, 4]
-    means = paddle.to_tensor(means, place=src_boxes.place)
-    stds = paddle.to_tensor(stds, place=src_boxes.place)
+    deltas = torch.stack((dx, dy, dw, dh), axis=1)  # [n, 4]
+    means = torch.to_tensor(means, place=src_boxes.place)
+    stds = torch.to_tensor(stds, place=src_boxes.place)
     deltas = (deltas - means) / stds
     return deltas
