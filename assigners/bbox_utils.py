@@ -19,7 +19,6 @@ def bbox2delta(src_boxes, tgt_boxes, weights):
     dy = wy * (tgt_ctr_y - src_ctr_y) / src_h
     dw = ww * torch.log(tgt_w / src_w)
     dh = wh * torch.log(tgt_h / src_h)
-
     deltas = torch.stack((dx, dy, dw, dh), dim=1)
     return deltas
 
@@ -38,20 +37,20 @@ def delta2bbox(deltas, boxes, weights):
     dw = deltas[:, 2::4] / ww
     dh = deltas[:, 3::4] / wh
     # Prevent sending too large values into paddle.exp()
-    dw = paddle.clip(dw, max=clip_scale)
-    dh = paddle.clip(dh, max=clip_scale)
+    dw = torch.clip(dw, max=clip_scale)
+    dh = torch.clip(dh, max=clip_scale)
 
     pred_ctr_x = dx * widths.unsqueeze(1) + ctr_x.unsqueeze(1)
     pred_ctr_y = dy * heights.unsqueeze(1) + ctr_y.unsqueeze(1)
-    pred_w = paddle.exp(dw) * widths.unsqueeze(1)
-    pred_h = paddle.exp(dh) * heights.unsqueeze(1)
+    pred_w = torch.exp(dw) * widths.unsqueeze(1)
+    pred_h = torch.exp(dh) * heights.unsqueeze(1)
 
     pred_boxes = []
     pred_boxes.append(pred_ctr_x - 0.5 * pred_w)
     pred_boxes.append(pred_ctr_y - 0.5 * pred_h)
     pred_boxes.append(pred_ctr_x + 0.5 * pred_w)
     pred_boxes.append(pred_ctr_y + 0.5 * pred_h)
-    pred_boxes = paddle.stack(pred_boxes, axis=-1)
+    pred_boxes = torch.stack(pred_boxes, dim=-1)
 
     return pred_boxes
 
@@ -80,16 +79,16 @@ def clip_bbox(boxes, im_shape):
     y1 = boxes[:, 1].clip(0, h)
     x2 = boxes[:, 2].clip(0, w)
     y2 = boxes[:, 3].clip(0, h)
-    return paddle.stack([x1, y1, x2, y2], axis=1)
+    return torch.stack([x1, y1, x2, y2], dim=1)
 
 
 def nonempty_bbox(boxes, min_size=0, return_mask=False):
     w = boxes[:, 2] - boxes[:, 0]
     h = boxes[:, 3] - boxes[:, 1]
-    mask = paddle.logical_and(h > min_size, w > min_size)
+    mask = torch.logical_and(h > min_size, w > min_size)
     if return_mask:
         return mask
-    keep = paddle.nonzero(mask).flatten()
+    keep = torch.nonzero(mask).flatten()
     return keep
 
 
@@ -111,21 +110,22 @@ def bbox_overlaps(boxes1, boxes2):
     M = boxes1.shape[0]
     N = boxes2.shape[0]
     if M * N == 0:
-        return paddle.zeros([M, N], dtype='float32')
+        return torch.zeros([M, N], dtype=torch.float32)
+
     area1 = bbox_area(boxes1)
     area2 = bbox_area(boxes2)
 
-    xy_max = paddle.minimum(
-        paddle.unsqueeze(boxes1, 1)[:, :, 2:], boxes2[:, 2:])
-    xy_min = paddle.maximum(
-        paddle.unsqueeze(boxes1, 1)[:, :, :2], boxes2[:, :2])
+    xy_max = torch.minimum(torch.unsqueeze(boxes1, 1)[:, :, 2:], boxes2[:, 2:])
+    
+    xy_min = torch.maximum(torch.unsqueeze(boxes1, 1)[:, :, :2], boxes2[:, :2])
+
     width_height = xy_max - xy_min
     width_height = width_height.clip(min=0)
-    inter = width_height.prod(axis=2)
+    inter = width_height.prod(dim=2)
 
-    overlaps = paddle.where(inter > 0, inter /
-                            (paddle.unsqueeze(area1, 1) + area2 - inter),
-                            paddle.zeros_like(inter))
+    overlaps = torch.where(inter > 0, inter /
+                            (torch.unsqueeze(area1, 1) + area2 - inter),
+                            torch.zeros_like(inter))
     return overlaps
 
 
@@ -169,16 +169,16 @@ def batch_bbox_overlaps(bboxes1,
 
     if rows * cols == 0:
         if is_aligned:
-            return paddle.full(batch_shape + (rows,), 1)
+            return torch.full(batch_shape + (rows,), 1)
         else:
-            return paddle.full(batch_shape + (rows, cols), 1)
+            return torch.full(batch_shape + (rows, cols), 1)
 
     area1 = (bboxes1[:, 2] - bboxes1[:, 0]) * (bboxes1[:, 3] - bboxes1[:, 1])
     area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (bboxes2[:, 3] - bboxes2[:, 1])
 
     if is_aligned:
-        lt = paddle.maximum(bboxes1[:, :2], bboxes2[:, :2])  # [B, rows, 2]
-        rb = paddle.minimum(bboxes1[:, 2:], bboxes2[:, 2:])  # [B, rows, 2]
+        lt = torch.maximum(bboxes1[:, :2], bboxes2[:, :2])  # [B, rows, 2]
+        rb = torch.minimum(bboxes1[:, 2:], bboxes2[:, 2:])  # [B, rows, 2]
 
         wh = (rb - lt).clip(min=0)  # [B, rows, 2]
         overlap = wh[:, 0] * wh[:, 1]
@@ -188,12 +188,12 @@ def batch_bbox_overlaps(bboxes1,
         else:
             union = area1
         if mode == 'giou':
-            enclosed_lt = paddle.minimum(bboxes1[:, :2], bboxes2[:, :2])
-            enclosed_rb = paddle.maximum(bboxes1[:, 2:], bboxes2[:, 2:])
+            enclosed_lt = torch.minimum(bboxes1[:, :2], bboxes2[:, :2])
+            enclosed_rb = torch.maximum(bboxes1[:, 2:], bboxes2[:, 2:])
     else:
-        lt = paddle.maximum(bboxes1[:, :2].reshape([rows, 1, 2]),
+        lt = torch.maximum(bboxes1[:, :2].reshape([rows, 1, 2]),
                             bboxes2[:, :2])  # [B, rows, cols, 2]
-        rb = paddle.minimum(bboxes1[:, 2:].reshape([rows, 1, 2]),
+        rb = torch.minimum(bboxes1[:, 2:].reshape([rows, 1, 2]),
                             bboxes2[:, 2:])  # [B, rows, cols, 2]
 
         wh = (rb - lt).clip(min=0)  # [B, rows, cols, 2]
@@ -847,7 +847,7 @@ def bbox2delta_v2(src_boxes,
     dw = torch.log(tgt_w / src_w)
     dh = torch.log(tgt_h / src_h)
 
-    deltas = torch.stack((dx, dy, dw, dh), axis=1)  # [n, 4]
+    deltas = torch.stack((dx, dy, dw, dh), dim=1)  # [n, 4]
     means = torch.to_tensor(means, place=src_boxes.place)
     stds = torch.to_tensor(stds, place=src_boxes.place)
     deltas = (deltas - means) / stds
