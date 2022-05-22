@@ -1,5 +1,3 @@
-
-
 import math
 import paddle
 import numpy as np
