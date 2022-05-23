@@ -116,7 +116,7 @@ def bbox_overlaps(boxes1, boxes2):
     area2 = bbox_area(boxes2)
 
     xy_max = torch.minimum(torch.unsqueeze(boxes1, 1)[:, :, 2:], boxes2[:, 2:])
-    
+
     xy_min = torch.maximum(torch.unsqueeze(boxes1, 1)[:, :, :2], boxes2[:, :2])
 
     width_height = xy_max - xy_min
@@ -210,7 +210,7 @@ def batch_bbox_overlaps(bboxes1,
             enclosed_rb = torch.maximum(bboxes1[:, 2:].reshape([rows, 1, 2]),
                                          bboxes2[:, 2:])
 
-    eps = torch.to_tensor([eps])
+    eps = torch.tensor([eps])
     union = torch.maximum(union, eps)
     ious = overlap / union
     if mode in ['iou', 'iof']:
@@ -255,7 +255,7 @@ def decode_yolo(box, anchor, downsample_ratio):
     x1 = (x + grid[:, :, :, :, 0:1]) / grid_w
     y1 = (y + grid[:, :, :, :, 1:2]) / grid_h
 
-    anchor = torch.to_tensor(anchor)
+    anchor = torch.tensor(anchor)
     anchor = torch.cast(anchor, x.dtype)
     anchor = anchor.reshape((1, na, 1, 1, 2))
     w1 = torch.exp(w) * anchor[:, :, :, :, 0:1] / (downsample_ratio * grid_w)
@@ -381,8 +381,8 @@ def delta2rbox(rrois,
     :param wh_ratio_clip:
     :return:
     """
-    means = torch.to_tensor(means)
-    stds = torch.to_tensor(stds)
+    means = torch.tensor(means)
+    stds = torch.tensor(stds)
     deltas = torch.reshape(deltas, [-1, deltas.shape[-1]])
     denorm_deltas = deltas * stds + means
 
@@ -410,10 +410,10 @@ def delta2rbox(rrois,
     gh = rroi_h * dh.exp()
     ga = np.pi * dangle + rroi_angle
     ga = (ga + np.pi / 4) % np.pi - np.pi / 4
-    ga = torch.to_tensor(ga)
+    ga = torch.tensor(ga)
 
-    gw = torch.to_tensor(gw, dtype='float32')
-    gh = torch.to_tensor(gh, dtype='float32')
+    gw = torch.tensor(gw, dtype=torch.float32)
+    gh = torch.tensor(gh, dtype=torch.float32)
     bboxes = torch.stack([gx, gy, gw, gh, ga], dim=-1)
     return bboxes
 
@@ -473,20 +473,20 @@ def bbox_decode(bbox_preds,
     return:
         bboxes: [N,H,W,5]
     """
-    means = torch.to_tensor(means)
-    stds = torch.to_tensor(stds)
+    means = torch.tensor(means)
+    stds = torch.tensor(stds)
     num_imgs, H, W, _ = bbox_preds.shape
     bboxes_list = []
     for img_id in range(num_imgs):
         bbox_pred = bbox_preds[img_id]
         # bbox_pred.shape=[5,H,W]
         bbox_delta = bbox_pred
-        anchors = torch.to_tensor(anchors)
+        anchors = torch.tensor(anchors)
         bboxes = delta2rbox(
             anchors, bbox_delta, means, stds, wh_ratio_clip=1e-6)
         bboxes = torch.reshape(bboxes, [H, W, 5])
         bboxes_list.append(bboxes)
-    return torch.stack(bboxes_list, axis=0)
+    return torch.stack(bboxes_list, dim=0)
 
 
 def poly2rbox(polys):
@@ -789,8 +789,9 @@ def delta2bbox_v2(rois,
     """
     if rois.size == 0:
         return torch.empty_like(rois)
-    means = torch.to_tensor(means)
-    stds = torch.to_tensor(stds)
+
+    means = torch.tensor(means)
+    stds = torch.tensor(stds)
     deltas = deltas * stds + means
 
     dxy = deltas[..., :2]
@@ -848,7 +849,11 @@ def bbox2delta_v2(src_boxes,
     dh = torch.log(tgt_h / src_h)
 
     deltas = torch.stack((dx, dy, dw, dh), dim=1)  # [n, 4]
-    means = torch.to_tensor(means, place=src_boxes.place)
-    stds = torch.to_tensor(stds, place=src_boxes.place)
+
+    means = torch.tensor(means, device=src_boxes.device)
+    stds = torch.tensor(stds, device=src_boxes.device)
+
+
+
     deltas = (deltas - means) / stds
     return deltas
