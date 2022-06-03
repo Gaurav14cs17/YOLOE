@@ -95,4 +95,6 @@ class ATSSssigner(nn.Module):
             return assigned_labels , assigned_bboxes , assigned_scores
 
 
+        ious = iou_
+
 
